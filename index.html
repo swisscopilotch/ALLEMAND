@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Flashcards allemand</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -22,10 +22,24 @@
   <div id="main" class="hidden">
     <header class="hd">
       <h1>Flashcards allemand</h1>
-      <div class="stats" id="stats"></div>
+      <div class="hd-actions">
+        <button class="icon-btn" id="statsBtn" title="Statistiques" aria-label="Statistiques">📊</button>
+        <button class="icon-btn" id="settingsBtn" title="Réglages" aria-label="Réglages">⚙️</button>
+      </div>
     </header>
 
-    <div class="filters" id="filters">
+    <div class="panel hidden" id="statsPanel">
+      <div class="stats-grid" id="statsGrid"></div>
+    </div>
+
+    <div class="panel hidden" id="settingsPanel">
+      <div class="filter-group">
+        <span class="filter-label">Affichage</span>
+        <div class="chips" id="viewChips">
+          <span class="chip active" data-view="cards">Cartes</span>
+          <span class="chip" data-view="list">Liste</span>
+        </div>
+      </div>
       <div class="filter-group">
         <span class="filter-label">Mode</span>
         <div class="chips" id="modeChips"></div>
@@ -34,23 +48,33 @@
         <span class="filter-label">Thème</span>
         <div class="chips" id="themeChips"></div>
       </div>
+      <div class="filter-group">
+        <span class="filter-label">Niveau</span>
+        <div class="chips" id="knowChips"></div>
+      </div>
+      <div class="filter-actions">
+        <button id="resetFilters">Réinitialiser les filtres</button>
+      </div>
+
+      <details class="data-mgmt">
+        <summary>Gestion des données</summary>
+        <div class="data-mgmt-body">
+          <a id="tImp">Importer des cartes</a>
+          <a id="tReset">Réinitialiser ma progression</a>
+          <div id="impBox" class="imp-box hidden">
+            <p>Colle ici le bloc JSON fourni en fin de séance.</p>
+            <textarea id="ta" placeholder='[{"id":"x1","mode":"reading","theme":"vocabulaire","front":"der Regen","phonetic":"[ré-guen]","back":"la pluie","note":"","audio_text":"der Regen"}]'></textarea>
+            <button id="doImp">Importer</button>
+            <div class="msg" id="impMsg"></div>
+          </div>
+        </div>
+      </details>
     </div>
 
     <div class="bar"><i id="barFill"></i></div>
 
     <div id="cardZone"></div>
-
-    <nav class="tools">
-      <a id="tImp">Importer des cartes</a>
-      <a id="tReset">Réinitialiser ma progression</a>
-    </nav>
-
-    <div id="impBox" class="imp-box hidden">
-      <p>Colle ici le bloc JSON fourni en fin de séance.</p>
-      <textarea id="ta" placeholder='[{"id":"x1","mode":"reading","theme":"vocabulaire","front":"der Regen","phonetic":"[ré-guen]","back":"la pluie","note":"","audio_text":"der Regen"}]'></textarea>
-      <button id="doImp">Importer</button>
-      <div class="msg" id="impMsg"></div>
-    </div>
+    <div id="listZone"></div>
   </div>
 </div>
 
