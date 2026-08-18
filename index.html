@@ -21,60 +21,74 @@
 
   <div id="main" class="hidden">
     <header class="hd">
-      <h1>Flashcards allemand</h1>
-      <div class="hd-actions">
-        <button class="icon-btn" id="statsBtn" title="Statistiques" aria-label="Statistiques">📊</button>
-        <button class="icon-btn" id="settingsBtn" title="Réglages" aria-label="Réglages">⚙️</button>
+      <div class="hd-row">
+        <span class="counter" id="counter">0 / 0</span>
+        <button class="icon-btn" id="menuBtn" title="Menu" aria-label="Menu"></button>
+        <div class="menu hidden" id="menu">
+      <div class="panel" id="statsPanel">
+        <span class="panel-title">Progression</span>
+        <div class="stats-grid" id="statsGrid"></div>
       </div>
-    </header>
 
-    <div class="panel hidden" id="statsPanel">
-      <div class="stats-grid" id="statsGrid"></div>
-    </div>
-
-    <div class="panel hidden" id="settingsPanel">
-      <div class="filter-group">
-        <span class="filter-label">Affichage</span>
-        <div class="chips" id="viewChips">
-          <span class="chip active" data-view="cards">Cartes</span>
-          <span class="chip" data-view="list">Liste</span>
+      <div class="panel" id="settingsPanel">
+        <div class="panel-head">
+          <span class="panel-title">Filtres et réglages</span>
+          <button class="more-btn" id="moreBtn">Voir plus</button>
         </div>
-      </div>
-      <div class="filter-group">
-        <span class="filter-label">Mode</span>
-        <div class="chips" id="modeChips"></div>
-      </div>
-      <div class="filter-group">
-        <span class="filter-label">Thème</span>
-        <div class="chips" id="themeChips"></div>
-      </div>
-      <div class="filter-group">
-        <span class="filter-label">Niveau</span>
-        <div class="chips" id="knowChips"></div>
-      </div>
-      <div class="filter-actions">
-        <button id="resetFilters">Réinitialiser les filtres</button>
-      </div>
-
-      <details class="data-mgmt">
-        <summary>Gestion des données</summary>
-        <div class="data-mgmt-body">
-          <a id="tImp">Importer des cartes</a>
-          <a id="tReset">Réinitialiser ma progression</a>
-          <div id="impBox" class="imp-box hidden">
-            <p>Colle ici le bloc JSON fourni en fin de séance.</p>
-            <textarea id="ta" placeholder='[{"id":"x1","mode":"reading","theme":"vocabulaire","front":"der Regen","phonetic":"[ré-guen]","back":"la pluie","note":"","audio_text":"der Regen"}]'></textarea>
-            <button id="doImp">Importer</button>
-            <div class="msg" id="impMsg"></div>
+        <div class="settings-body hidden" id="settingsBody">
+        <div class="filter-group">
+          <span class="filter-label">Affichage</span>
+          <div class="chips" id="viewChips">
+            <span class="chip active" data-view="cards">Cartes</span>
+            <span class="chip" data-view="list">Liste</span>
           </div>
         </div>
-      </details>
-    </div>
+        <div class="filter-group">
+          <span class="filter-label">Tri</span>
+          <div class="chips" id="sortChips"></div>
+        </div>
+        <div class="filter-group">
+          <span class="filter-label">Mode</span>
+          <div class="chips" id="modeChips"></div>
+        </div>
+        <div class="filter-group">
+          <span class="filter-label">Thème</span>
+          <div class="chips" id="themeChips"></div>
+        </div>
+        <div class="filter-group">
+          <span class="filter-label">Niveau</span>
+          <div class="chips" id="knowChips"></div>
+        </div>
+        <div class="filter-actions">
+          <button id="resetFilters">Réinitialiser les filtres</button>
+        </div>
 
-    <div class="bar"><i id="barFill"></i></div>
+        <details class="data-mgmt">
+          <summary>Gestion des données</summary>
+          <div class="data-mgmt-body">
+            <a id="tImp">Importer des cartes</a>
+            <a id="tReset">Réinitialiser ma progression</a>
+            <div id="impBox" class="imp-box hidden">
+              <p>Colle ici le bloc JSON fourni en fin de séance.</p>
+              <textarea id="ta" placeholder='[{"id":"x1","mode":"reading","theme":"vocabulaire","front":"der Regen","phonetic":"[ré-guen]","back":"la pluie","note":"","audio_text":"der Regen"}]'></textarea>
+              <button id="doImp">Importer</button>
+              <div class="msg" id="impMsg"></div>
+            </div>
+          </div>
+        </details>
+        </div>
+      </div>
+      </div>
+      <div class="bar"><i id="barFill"></i></div>
+    </header>
 
     <div id="cardZone"></div>
     <div id="listZone"></div>
+
+    <footer class="foot" id="foot">
+      <div class="btns" id="levelBtns"></div>
+      <div class="foot-row" id="footRow"></div>
+    </footer>
   </div>
 </div>
 

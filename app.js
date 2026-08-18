@@ -43,6 +43,16 @@ let history = []; // pile des cartes deja vues cette session, pour le bouton pre
 let idx = 0;
 let flip = false;
 let revealed = new Set(); // ids reveles en vue liste
+let sortMode = "recent"; // "recent" | "old" | "random"
+let randKeys = {}; // id -> nombre aleatoire, regenere a chaque passage en tri aleatoire
+let colWidths = (() => {
+  try {
+    const raw = JSON.parse(localStorage.getItem("colWidths") || "null");
+    if (raw && typeof raw.q === "number") return raw;
+  } catch (e) { /* ignore */ }
+  return { q: 34, a: 46, n: 20 }; // pourcentages, somme = 100
+})();
+function saveColWidths() { localStorage.setItem("colWidths", JSON.stringify(colWidths)); }
 
 /* ---------------- Préférences locales (filtres, vue) ---------------- */
 function loadPrefs() {
@@ -54,11 +64,12 @@ function loadPrefs() {
     if (p.themes) activeThemes = new Set(p.themes);
     if (p.knowledge) activeKnowledge = new Set(p.knowledge);
     if (p.view) view = p.view;
+    if (p.sortMode) sortMode = p.sortMode;
   } catch (e) { /* ignore */ }
 }
 function savePrefs() {
   localStorage.setItem(PREF_KEY, JSON.stringify({
-    modes: [...activeModes], themes: [...activeThemes], knowledge: [...activeKnowledge], view,
+    modes: [...activeModes], themes: [...activeThemes], knowledge: [...activeKnowledge], view, sortMode,
   }));
 }
 
@@ -180,6 +191,19 @@ function knowledgeOf(cardId) {
   return String(p.last_q);
 }
 function knowledgeLabel(id) { return KNOWLEDGE.find(k => k.id === id)?.label || id; }
+const SORTS = [
+  { id: "recent", label: "Récentes" },
+  { id: "old", label: "Anciennes" },
+  { id: "random", label: "Aléatoire" },
+];
+function reseedRandom() { randKeys = {}; cards.forEach(c => { randKeys[c.id] = Math.random(); }); }
+function addedAt(c) { return c.created_at ? Date.parse(c.created_at) || 0 : 0; }
+function applySort(arr) {
+  const a = arr.slice();
+  if (sortMode === "random") return a.sort((x, y) => (randKeys[x.id] ?? 0) - (randKeys[y.id] ?? 0));
+  if (sortMode === "old") return a.sort((x, y) => addedAt(x) - addedAt(y));
+  return a.sort((x, y) => addedAt(y) - addedAt(x));
+}
 function passesFilters(c) {
   return activeModes.has(c.mode) && activeThemes.has(c.theme) && activeKnowledge.has(knowledgeOf(c.id));
 }
@@ -226,12 +250,22 @@ function buildFilters() {
   const themeBox = document.getElementById("themeChips");
   const knowBox = document.getElementById("knowChips");
   const viewBox = document.getElementById("viewChips");
+  const sortBox = document.getElementById("sortChips");
+
+  sortBox.innerHTML = SORTS.map(s =>
+    `<span class="chip ${sortMode === s.id ? "active" : ""}" data-sort="${s.id}">${s.label}</span>`
+  ).join("");
+  sortBox.querySelectorAll(".chip").forEach(el => el.onclick = () => {
+    sortMode = el.getAttribute("data-sort");
+    if (sortMode === "random") reseedRandom();
+    onFiltersChanged();
+  });
 
   modeBox.innerHTML = MODES.map(m =>
-    `<span class="chip ${activeModes.has(m.id) ? "active" : ""}" data-mode="${m.id}">${m.label}</span>`
+    `<span class="chip tag-mode m-${m.id} ${activeModes.has(m.id) ? "active" : ""}" data-mode="${m.id}">${m.label}</span>`
   ).join("");
   themeBox.innerHTML = THEMES.map(t =>
-    `<span class="chip ${activeThemes.has(t.id) ? "active" : ""}" data-theme="${t.id}">${t.label}</span>`
+    `<span class="chip tag-theme t-${t.id} ${activeThemes.has(t.id) ? "active" : ""}" data-theme="${t.id}">${t.label}</span>`
   ).join("");
   knowBox.innerHTML = KNOWLEDGE.map(k =>
     `<span class="chip ${activeKnowledge.has(k.id) ? "active" : ""}" data-know="${k.id}">${k.label}</span>`
@@ -277,71 +311,86 @@ function onFiltersChanged() {
   renderCurrentView();
 }
 
+function syncHeaderHeight() {
+  const hd = document.querySelector(".hd");
+  if (hd) document.documentElement.style.setProperty("--hd-h", Math.ceil(hd.getBoundingClientRect().height) + "px");
+}
+window.addEventListener("resize", syncHeaderHeight);
+
 function renderCurrentView() {
   document.getElementById("cardZone").classList.toggle("hidden", view !== "cards");
   document.getElementById("listZone").classList.toggle("hidden", view !== "list");
+  document.getElementById("foot").classList.toggle("hidden", view !== "cards");
+  document.body.classList.toggle("view-list", view === "list");
+  document.body.classList.toggle("view-cards", view === "cards");
   document.querySelector(".bar").classList.toggle("hidden", view !== "cards");
   if (view === "cards") renderCard(); else renderList();
+  syncHeaderHeight();
   renderStatsPanel();
 }
 
 /* ---------------- File de révision (vue cartes) ---------------- */
 function rebuildQueue() {
   const t = today();
-  queue = cards
-    .filter(passesFilters)
-    .filter(c => { const p = progress[c.id]; return !p || p.due_date <= t; })
-    .map(c => c.id);
+  queue = applySort(cards.filter(passesFilters).filter(c => { const p = progress[c.id]; return !p || p.due_date <= t; })).map(c => c.id);
   idx = 0; flip = false; history = [];
+}
+
+const LEVEL_BTNS = `
+  <button class="b1" data-q="0">Encore<span class="lbl">aujourd'hui</span></button>
+  <button class="b2" data-q="1">Difficile<span class="lbl">bientôt</span></button>
+  <button class="b3" data-q="2">Bien<span class="lbl">plus tard</span></button>
+  <button class="b4" data-q="3">Facile<span class="lbl">longtemps</span></button>`;
+
+/* Pied de page fixe : selecteur de connaissance (toujours visible) + retour / action */
+function renderFoot(opts) {
+  const levels = document.getElementById("levelBtns");
+  const row = document.getElementById("footRow");
+  levels.innerHTML = LEVEL_BTNS;
+  levels.classList.toggle("muted", !opts.levelsEnabled);
+  levels.querySelectorAll("button").forEach(b => { b.disabled = !opts.levelsEnabled; });
+  row.innerHTML = `
+    <button class="foot-prev" id="prevCard" ${history.length === 0 ? "disabled" : ""} title="Précédente">‹ Précédente</button>
+    ${opts.action ? `<button class="wide" id="${opts.action.id}">${opts.action.label}</button>` : ""}`;
+  wirePrevButton();
 }
 
 function renderCard() {
   document.getElementById("barFill").style.width = queue.length ? (idx / queue.length * 100) + "%" : "0%";
+  document.getElementById("counter").innerHTML = queue.length
+    ? `<b>${Math.min(idx + 1, queue.length)}</b> / ${queue.length}`
+    : "0 / 0";
 
   const zone = document.getElementById("cardZone");
   const card = idx < queue.length ? cards.find(c => c.id === queue[idx]) : null;
 
-  const navHtml = `<div class="card-nav">
-      <button id="prevCard" ${history.length === 0 ? "disabled" : ""}>‹ Précédente</button>
-    </div>`;
-
   if (!card) {
-    zone.innerHTML = navHtml + `<div class="done">
+    zone.innerHTML = `<div class="done">
       <h2>Séance de révision terminée</h2>
       <p>Rien d'autre à revoir aujourd'hui avec ces filtres. Chaque carte revient à son échéance.</p>
-      <div class="btns" style="max-width:260px;margin:0 auto">
-        <button class="wide" id="all">Réviser quand même</button>
-      </div></div>`;
+      </div>`;
+    renderFoot({ levelsEnabled: false, action: { id: "all", label: "Réviser quand même" } });
     document.getElementById("all").onclick = () => {
-      queue = cards.filter(passesFilters).map(c => c.id);
+      queue = applySort(cards.filter(passesFilters)).map(c => c.id);
       idx = 0; flip = false; history = []; renderCard();
     };
-    wirePrevButton();
     return;
   }
 
   const modeLabel = MODES.find(m => m.id === card.mode)?.label || card.mode;
   const themeLabel = THEMES.find(t => t.id === card.theme)?.label || card.theme;
-  const meta = `<div class="card-meta"><span>${esc(modeLabel)}</span><span>${esc(themeLabel)}</span></div>`;
+  const meta = `<div class="card-meta"><span class="tag-mode m-${esc(card.mode)}">${esc(modeLabel)}</span><span class="tag-theme t-${esc(card.theme)}">${esc(themeLabel)}</span></div>`;
 
   if (card.mode === "writing") {
-    zone.innerHTML = navHtml + `
+    zone.innerHTML = `
       <div class="card" style="cursor:default">
         ${meta}
         <div class="back">${esc(card.back)}</div>
         <input type="text" class="writing-input" id="wInput" placeholder="Écris la réponse en allemand" autocomplete="off" autocapitalize="off" spellcheck="false">
         <div class="writing-feedback" id="wFeedback"></div>
         ${flip ? `<div class="sep"></div><div class="front" style="font-size:20px">${esc(card.front)}</div>${card.phonetic ? `<div class="ph">${esc(card.phonetic)}</div>` : ""}${card.note ? `<div class="note">${esc(card.note)}</div>` : ""}` : ""}
-      </div>
-      <div class="btns">
-        ${!flip
-          ? `<button class="wide" id="checkW">Vérifier</button>`
-          : `<button class="b1" data-q="0">Encore<span class="lbl">aujourd'hui</span></button>
-             <button class="b2" data-q="1">Difficile<span class="lbl">bientôt</span></button>
-             <button class="b3" data-q="2">Bien<span class="lbl">plus tard</span></button>
-             <button class="b4" data-q="3">Facile<span class="lbl">longtemps</span></button>`}
       </div>`;
-    wirePrevButton();
+    renderFoot({ levelsEnabled: flip, action: flip ? null : { id: "checkW", label: "Vérifier" } });
     const input = document.getElementById("wInput");
     input.focus();
     const normalize = s => s.trim().toLowerCase().replace(/\s+/g, " ");
@@ -362,23 +411,14 @@ function renderCard() {
   }
 
   const showFrontFirst = card.mode !== "listening";
-  zone.innerHTML = navHtml + `
+  zone.innerHTML = `
     <div class="card" id="cd">
       ${meta}
       ${showFrontFirst ? `<div class="front">${esc(card.front)}</div>${card.phonetic ? `<div class="ph">${esc(card.phonetic)}</div>` : ""}` : `<div class="front">🔊 ?</div>`}
       <button class="audio-btn" id="playAudio" title="Écouter">🔊</button>
       ${flip ? `<div class="sep"></div><div class="back">${esc(card.back)}</div>${!showFrontFirst ? `<div class="front" style="font-size:20px;margin-top:10px">${esc(card.front)}</div>${card.phonetic ? `<div class="ph">${esc(card.phonetic)}</div>` : ""}` : ""}${card.note ? `<div class="note">${esc(card.note)}</div>` : ""}` : ""}
-    </div>
-    ${flip
-      ? `<div class="btns">
-           <button class="b1" data-q="0">Encore<span class="lbl">aujourd'hui</span></button>
-           <button class="b2" data-q="1">Difficile<span class="lbl">bientôt</span></button>
-           <button class="b3" data-q="2">Bien<span class="lbl">plus tard</span></button>
-           <button class="b4" data-q="3">Facile<span class="lbl">longtemps</span></button>
-         </div>`
-      : `<div class="btns"><button class="wide" id="show">Afficher la réponse</button></div>`}
-  `;
-  wirePrevButton();
+    </div>`;
+  renderFoot({ levelsEnabled: flip, action: flip ? null : { id: "show", label: "Afficher la réponse" } });
   document.getElementById("playAudio").onclick = (e) => { e.stopPropagation(); speak(card.audio_text || card.front); };
   const cd = document.getElementById("cd");
   if (!flip) cd.onclick = () => { flip = true; renderCard(); };
@@ -421,7 +461,7 @@ function wireAnswerButtons(cardId) {
 
 /* ---------------- Vue liste ---------------- */
 function renderList() {
-  const rows = cards.filter(passesFilters).sort((a, b) => a.front.localeCompare(b.front, "de"));
+  const rows = applySort(cards.filter(passesFilters));
   const zone = document.getElementById("listZone");
   if (!rows.length) {
     zone.innerHTML = `<div class="done"><h2>Aucune carte</h2><p>Aucune carte ne correspond aux filtres actifs.</p></div>`;
@@ -429,7 +469,16 @@ function renderList() {
   }
   zone.innerHTML = `
     <table class="list-table">
-      <thead><tr><th>Question</th><th>Réponse</th><th>Niveau</th></tr></thead>
+      <colgroup>
+        <col id="colQ" style="width:${colWidths.q}%">
+        <col id="colA" style="width:${colWidths.a}%">
+        <col id="colN" style="width:${colWidths.n}%">
+      </colgroup>
+      <thead><tr>
+        <th>Question<span class="col-resizer" data-pair="qa"></span></th>
+        <th>Réponse<span class="col-resizer" data-pair="an"></span></th>
+        <th>Niveau</th>
+      </tr></thead>
       <tbody>
         ${rows.map(c => {
           const isOpen = revealed.has(c.id);
@@ -443,7 +492,7 @@ function renderList() {
             <td class="list-a" data-reveal="${esc(c.id)}">
               ${isOpen
                 ? `${esc(c.back)}${c.note ? `<span class="note-inline">${esc(c.note)}</span>` : ""}`
-                : `<span class="reveal-hint">Toucher pour révéler</span>`}
+                : `<span class="reveal-hint" title="Toucher pour révéler"></span>`}
             </td>
             <td class="list-level"><span class="badge k-${k}">${esc(knowledgeLabel(k))}</span></td>
           </tr>`;
@@ -461,6 +510,42 @@ function renderList() {
     const id = el.getAttribute("data-audio");
     const c = cards.find(x => x.id === id);
     if (c) speak(c.audio_text || c.front);
+  });
+  zone.querySelectorAll(".col-resizer").forEach(handle => {
+    const start = (clientX) => {
+      const pair = handle.getAttribute("data-pair"); // "qa" ou "an"
+      const table = zone.querySelector("table");
+      const tableW = table.offsetWidth;
+      const [kL, kR] = pair === "qa" ? ["q", "a"] : ["a", "n"];
+      const startL = colWidths[kL];
+      const startR = colWidths[kR];
+  const min = 12; // % minimum par colonne
+      handle.classList.add("dragging");
+      const move = (x) => {
+        const deltaPct = (x - clientX) / tableW * 100;
+        const d = Math.max(min - startL, Math.min(startR - min, deltaPct));
+        colWidths[kL] = Math.round((startL + d) * 10) / 10;
+        colWidths[kR] = Math.round((startR - d) * 10) / 10;
+        document.getElementById("colQ").style.width = colWidths.q + "%";
+        document.getElementById("colA").style.width = colWidths.a + "%";
+        document.getElementById("colN").style.width = colWidths.n + "%";
+        saveColWidths();
+      };
+      const onMove = (ev) => move(ev.touches ? ev.touches[0].clientX : ev.clientX);
+      const onUp = () => {
+        handle.classList.remove("dragging");
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        document.removeEventListener("touchmove", onMove);
+        document.removeEventListener("touchend", onUp);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+      document.addEventListener("touchmove", onMove, { passive: true });
+      document.addEventListener("touchend", onUp);
+    };
+    handle.onmousedown = (e) => { e.preventDefault(); start(e.clientX); };
+    handle.ontouchstart = (e) => start(e.touches[0].clientX);
   });
 }
 
@@ -497,8 +582,25 @@ function wireImportPanel() {
 
 /* ---------------- Initialisation ---------------- */
 function wireHeader() {
-  document.getElementById("statsBtn").onclick = () => { togglePanel("stats"); renderStatsPanel(); };
-  document.getElementById("settingsBtn").onclick = () => togglePanel("settings");
+  const btn = document.getElementById("menuBtn");
+  const menu = document.getElementById("menu");
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    const open = menu.classList.toggle("hidden");
+    btn.classList.toggle("active", !open);
+    if (!open) renderStatsPanel();
+  };
+  document.addEventListener("mousedown", (e) => {
+    if (menu.classList.contains("hidden")) return;
+    if (menu.contains(e.target) || btn.contains(e.target)) return;
+    menu.classList.add("hidden");
+    btn.classList.remove("active");
+  });
+  const more = document.getElementById("moreBtn");  more.onclick = () => {
+    const body = document.getElementById("settingsBody");
+    const hidden = body.classList.toggle("hidden");
+    more.textContent = hidden ? "Voir plus" : "Masquer";
+  };
 }
 
 async function init() {
